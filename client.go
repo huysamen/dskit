@@ -2,6 +2,7 @@ package dskit
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"cloud.google.com/go/compute/metadata"
@@ -31,6 +32,18 @@ func NewClient(ctx context.Context, databaseID string, options ...option.ClientO
 		}
 	} else {
 		projectID = os.Getenv("GCP_PROJECT_ID")
+
+		if projectID == "" {
+			projectID = os.Getenv("DATASTORE_PROJECT_ID")
+		}
+
+		if projectID == "" {
+			projectID = databaseID
+		}
+
+		if projectID == "" {
+			return nil, errors.New("project ID must be provided via GCP_PROJECT_ID, DATASTORE_PROJECT_ID, or databaseID when using the Datastore emulator")
+		}
 	}
 
 	return datastore.NewClient(ctx, projectID, opts...)

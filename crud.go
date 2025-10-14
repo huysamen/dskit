@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"cloud.google.com/go/datastore"
 )
@@ -44,9 +45,14 @@ type crud[E Entity] struct {
 
 func NewCRUDRepo[E Entity](client *datastore.Client) CRUD[E] {
 	var e E
+
+	kind := e.Kind()
+
+	rememberKindType(kind, reflect.TypeOf(&e).Elem())
+
 	return &crud[E]{
 		client: client,
-		kind:   e.Kind(),
+		kind:   kind,
 	}
 }
 
@@ -70,6 +76,10 @@ func (r *crud[E]) Create(ctx context.Context, key *datastore.Key, entity *E) (*d
 }
 
 func (r *crud[E]) CreateTxn(txn *datastore.Transaction, key *datastore.Key, entity *E) (*datastore.PendingKey, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	if key == nil {
 		newKey, err := entityNewKey(entity)
 		if err != nil {
@@ -116,6 +126,10 @@ func (r *crud[E]) CreateMulti(ctx context.Context, keys []*datastore.Key, entiti
 }
 
 func (r *crud[E]) CreateMultiTxn(txn *datastore.Transaction, keys []*datastore.Key, entities []*E) ([]*datastore.PendingKey, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	if len(entities) == 0 {
 		return nil, errors.New("entities cannot be empty")
 	}
@@ -159,6 +173,10 @@ func (r *crud[E]) Read(ctx context.Context, key *datastore.Key) (*E, error) {
 }
 
 func (r *crud[E]) ReadTxn(txn *datastore.Transaction, key *datastore.Key) (*E, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	var e E
 
 	err := txn.Get(key, &e)
@@ -194,6 +212,10 @@ func (r *crud[E]) ReadMulti(ctx context.Context, keys []*datastore.Key) ([]*E, e
 }
 
 func (r *crud[E]) ReadMultiTxn(txn *datastore.Transaction, keys []*datastore.Key) ([]*E, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	if len(keys) == 0 {
 		return make([]*E, 0), nil
 	}
@@ -223,6 +245,10 @@ func (r *crud[E]) List(ctx context.Context, ancestor *datastore.Key) ([]*E, *dat
 }
 
 func (r *crud[E]) ListTxn(ctx context.Context, txn *datastore.Transaction, ancestor *datastore.Key) ([]*E, *datastore.Cursor, error) {
+	if txn == nil {
+		return nil, nil, errors.New("transaction cannot be nil")
+	}
+
 	query := datastore.NewQuery(r.kind)
 
 	if ancestor != nil {
@@ -243,6 +269,10 @@ func (r *crud[E]) ListKeys(ctx context.Context, ancestor *datastore.Key) ([]*dat
 }
 
 func (r *crud[E]) ListKeysTxn(ctx context.Context, txn *datastore.Transaction, ancestor *datastore.Key) ([]*datastore.Key, *datastore.Cursor, error) {
+	if txn == nil {
+		return nil, nil, errors.New("transaction cannot be nil")
+	}
+
 	query := datastore.NewQuery(r.kind)
 
 	if ancestor != nil {
@@ -265,6 +295,10 @@ func (r *crud[E]) ListAll(ctx context.Context, ancestor *datastore.Key) ([]*E, e
 }
 
 func (r *crud[E]) ListAllTxn(ctx context.Context, txn *datastore.Transaction, ancestor *datastore.Key) ([]*E, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	query := datastore.NewQuery(r.kind)
 
 	if ancestor != nil {
@@ -289,6 +323,10 @@ func (r *crud[E]) ListAllKeys(ctx context.Context, ancestor *datastore.Key) ([]*
 }
 
 func (r *crud[E]) ListAllKeysTxn(ctx context.Context, txn *datastore.Transaction, ancestor *datastore.Key) ([]*datastore.Key, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	query := datastore.NewQuery(r.kind)
 
 	if ancestor != nil {
@@ -314,6 +352,10 @@ func (r *crud[E]) Update(ctx context.Context, entity *E) error {
 }
 
 func (r *crud[E]) UpdateTxn(txn *datastore.Transaction, entity *E) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
 	key, err := entityKey(entity)
 	if err != nil {
 		return err
@@ -350,6 +392,10 @@ func (r *crud[E]) UpdateMulti(ctx context.Context, entities []*E) error {
 }
 
 func (r *crud[E]) UpdateMultiTxn(txn *datastore.Transaction, entities []*E) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
 	if len(entities) == 0 {
 		return nil
 	}
@@ -377,6 +423,10 @@ func (r *crud[E]) Delete(ctx context.Context, key *datastore.Key) error {
 }
 
 func (r *crud[E]) DeleteTxn(txn *datastore.Transaction, key *datastore.Key) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
 	return txn.Delete(key)
 }
 
@@ -385,6 +435,10 @@ func (r *crud[E]) DeleteMulti(ctx context.Context, keys []*datastore.Key) error 
 }
 
 func (r *crud[E]) DeleteMultiTxn(txn *datastore.Transaction, keys []*datastore.Key) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
 	return txn.DeleteMulti(keys)
 }
 
@@ -397,6 +451,10 @@ func (r *crud[E]) Query(ctx context.Context, query *datastore.Query) ([]*E, *dat
 }
 
 func (r *crud[E]) QueryTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query) ([]*E, *datastore.Cursor, error) {
+	if txn == nil {
+		return nil, nil, errors.New("transaction cannot be nil")
+	}
+
 	if query == nil {
 		query = datastore.NewQuery(r.kind)
 	}

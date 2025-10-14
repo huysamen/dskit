@@ -24,8 +24,8 @@ type DSKit interface {
 	ReadMultiTxn(ctx context.Context, txn *datastore.Transaction, keys []*datastore.Key) ([]any, error)
 	List(ctx context.Context, kind string, ancestor *datastore.Key) ([]any, *datastore.Cursor, error)
 	ListAll(ctx context.Context, kind string, ancestor *datastore.Key) ([]any, error)
-	Query(ctx context.Context, query *datastore.Query) ([]any, *datastore.Cursor, error)
-	QueryTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query) ([]any, *datastore.Cursor, error)
+	Query(ctx context.Context, kind string, query *datastore.Query) ([]any, *datastore.Cursor, error)
+	QueryTxn(ctx context.Context, txn *datastore.Transaction, kind string, query *datastore.Query) ([]any, *datastore.Cursor, error)
 	Update(ctx context.Context, key *datastore.Key, entity any) error
 	UpdateTxn(ctx context.Context, txn *datastore.Transaction, key *datastore.Key, entity any) error
 	UpdateMulti(ctx context.Context, keys []*datastore.Key, entities []any) error
@@ -58,15 +58,16 @@ type DSKit interface {
 	AvgFieldsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, fields ...string) (map[string]float64, error)
 	AvgFieldsWithCount(ctx context.Context, query *datastore.Query, fields ...string) (map[string]float64, int64, error)
 	AvgFieldsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, fields ...string) (map[string]float64, int64, error)
-	QueryAggregations(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (map[string]int64, map[string]int64, error)
-	QueryAggregationsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (map[string]int64, map[string]int64, error)
-	QueryAggregationsWithCount(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]int64, map[string]int64, error)
-	QueryAggregationsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]int64, map[string]int64, error)
+	QueryAggregations(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (map[string]float64, map[string]float64, error)
+	QueryAggregationsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (map[string]float64, map[string]float64, error)
+	QueryAggregationsWithCount(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]float64, map[string]float64, error)
+	QueryAggregationsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]float64, map[string]float64, error)
 }
 
+var globalKindTypes sync.Map
+
 type dskit struct {
-	client    *datastore.Client
-	kindTypes sync.Map
+	client *datastore.Client
 }
 
 func NewDSKit(client *datastore.Client) DSKit {
@@ -102,6 +103,10 @@ func (d *dskit) Create(ctx context.Context, key *datastore.Key, entity any) (*da
 }
 
 func (d *dskit) CreateTxn(ctx context.Context, txn *datastore.Transaction, key *datastore.Key, entity any) (*datastore.PendingKey, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	if key == nil {
 		newKey, err := normalizeAnyEntityNewKey(entity)
 		if err != nil {
@@ -150,6 +155,10 @@ func (d *dskit) CreateMulti(ctx context.Context, keys []*datastore.Key, entities
 }
 
 func (d *dskit) CreateMultiTxn(ctx context.Context, txn *datastore.Transaction, keys []*datastore.Key, entities []any) ([]*datastore.PendingKey, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	normalized, raw, err := normalizeAnyEntitySlice(entities)
 	if err != nil {
 		return nil, err
@@ -196,6 +205,10 @@ func (d *dskit) Read(ctx context.Context, key *datastore.Key) (any, error) {
 }
 
 func (d *dskit) ReadTxn(ctx context.Context, txn *datastore.Transaction, key *datastore.Key) (any, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	if key == nil {
 		return nil, errors.New("key cannot be nil")
 	}
@@ -245,6 +258,10 @@ func (d *dskit) ReadMulti(ctx context.Context, keys []*datastore.Key) ([]any, er
 }
 
 func (d *dskit) ReadMultiTxn(ctx context.Context, txn *datastore.Transaction, keys []*datastore.Key) ([]any, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
 	if len(keys) == 0 {
 		return make([]any, 0), nil
 	}
@@ -276,44 +293,60 @@ func (d *dskit) ReadMultiTxn(ctx context.Context, txn *datastore.Transaction, ke
 }
 
 func (d *dskit) List(ctx context.Context, kind string, ancestor *datastore.Key) ([]any, *datastore.Cursor, error) {
+	if kind == "" {
+		return nil, nil, errors.New("kind cannot be empty")
+	}
+
 	query := datastore.NewQuery(kind)
 	if ancestor != nil {
 		query = query.Ancestor(ancestor)
 	}
 
-	return d.runQuery(ctx, query)
+	return d.runQuery(ctx, kind, query)
 }
 
 func (d *dskit) ListAll(ctx context.Context, kind string, ancestor *datastore.Key) ([]any, error) {
+	if kind == "" {
+		return nil, errors.New("kind cannot be empty")
+	}
+
 	query := datastore.NewQuery(kind)
 	if ancestor != nil {
 		query = query.Ancestor(ancestor)
 	}
 
-	results, _, err := d.runQuery(ctx, query)
+	results, _, err := d.runQuery(ctx, kind, query)
 	return results, err
 }
 
-func (d *dskit) Query(ctx context.Context, query *datastore.Query) ([]any, *datastore.Cursor, error) {
-	if query == nil {
-		return nil, nil, errors.New("query cannot be nil")
+func (d *dskit) Query(ctx context.Context, kind string, query *datastore.Query) ([]any, *datastore.Cursor, error) {
+	if kind == "" {
+		return nil, nil, errors.New("kind cannot be empty")
 	}
 
-	return d.runQuery(ctx, query)
+	if query == nil {
+		query = datastore.NewQuery(kind)
+	}
+
+	return d.runQuery(ctx, kind, query)
 }
 
-func (d *dskit) QueryTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query) ([]any, *datastore.Cursor, error) {
-	if query == nil {
-		return nil, nil, errors.New("query cannot be nil")
-	}
-
+func (d *dskit) QueryTxn(ctx context.Context, txn *datastore.Transaction, kind string, query *datastore.Query) ([]any, *datastore.Cursor, error) {
 	if txn == nil {
 		return nil, nil, errors.New("transaction cannot be nil")
 	}
 
+	if kind == "" {
+		return nil, nil, errors.New("kind cannot be empty")
+	}
+
+	if query == nil {
+		query = datastore.NewQuery(kind)
+	}
+
 	query = query.Transaction(txn)
 
-	return d.runQuery(ctx, query)
+	return d.runQuery(ctx, kind, query)
 }
 
 func (d *dskit) Update(ctx context.Context, key *datastore.Key, entity any) error {
@@ -339,6 +372,10 @@ func (d *dskit) Update(ctx context.Context, key *datastore.Key, entity any) erro
 }
 
 func (d *dskit) UpdateTxn(ctx context.Context, txn *datastore.Transaction, key *datastore.Key, entity any) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
 	if key == nil {
 		resolvedKey, err := normalizeAnyEntityKey(entity)
 		if err != nil {
@@ -391,6 +428,10 @@ func (d *dskit) UpdateMulti(ctx context.Context, keys []*datastore.Key, entities
 }
 
 func (d *dskit) UpdateMultiTxn(ctx context.Context, txn *datastore.Transaction, keys []*datastore.Key, entities []any) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
 	normalized, raw, err := normalizeAnyEntitySlice(entities)
 	if err != nil {
 		return err
@@ -421,18 +462,54 @@ func (d *dskit) UpdateMultiTxn(ctx context.Context, txn *datastore.Transaction, 
 }
 
 func (d *dskit) Delete(ctx context.Context, key *datastore.Key) error {
+	if key == nil {
+		return errors.New("key cannot be nil")
+	}
+
 	return d.client.Delete(ctx, key)
 }
 
 func (d *dskit) DeleteTxn(ctx context.Context, txn *datastore.Transaction, key *datastore.Key) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
+	if key == nil {
+		return errors.New("key cannot be nil")
+	}
+
 	return txn.Delete(key)
 }
 
 func (d *dskit) DeleteMulti(ctx context.Context, keys []*datastore.Key) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	for i, key := range keys {
+		if key == nil {
+			return fmt.Errorf("key at index %d cannot be nil", i)
+		}
+	}
+
 	return d.client.DeleteMulti(ctx, keys)
 }
 
 func (d *dskit) DeleteMultiTxn(ctx context.Context, txn *datastore.Transaction, keys []*datastore.Key) error {
+	if txn == nil {
+		return errors.New("transaction cannot be nil")
+	}
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	for i, key := range keys {
+		if key == nil {
+			return fmt.Errorf("key at index %d cannot be nil", i)
+		}
+	}
+
 	return txn.DeleteMulti(keys)
 }
 
@@ -453,6 +530,10 @@ func (d *dskit) ExistsForQueryTxn(ctx context.Context, txn *datastore.Transactio
 }
 
 func (d *dskit) Count(ctx context.Context, kind string, ancestor *datastore.Key) (int, error) {
+	if kind == "" {
+		return 0, errors.New("kind cannot be empty")
+	}
+
 	query := datastore.NewQuery(kind)
 	if ancestor != nil {
 		query = query.Ancestor(ancestor)
@@ -467,6 +548,10 @@ func (d *dskit) CountTxn(ctx context.Context, txn *datastore.Transaction, kind s
 		return 0, errors.New("transaction cannot be nil")
 	}
 
+	if kind == "" {
+		return 0, errors.New("kind cannot be empty")
+	}
+
 	query := datastore.NewQuery(kind)
 	if ancestor != nil {
 		query = query.Ancestor(ancestor)
@@ -477,6 +562,10 @@ func (d *dskit) CountTxn(ctx context.Context, txn *datastore.Transaction, kind s
 }
 
 func (d *dskit) CountForQuery(ctx context.Context, query *datastore.Query) (int, error) {
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
 	count, err := CountForQuery(ctx, d.client, query)
 	return int(count), err
 }
@@ -486,13 +575,25 @@ func (d *dskit) CountForQueryTxn(ctx context.Context, txn *datastore.Transaction
 		return 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
 	count, err := CountForQueryTxn(ctx, txn, d.client, query)
 	return int(count), err
 }
 
 func (d *dskit) SumField(ctx context.Context, query *datastore.Query, field string) (float64, error) {
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	sum, err := SumForField(ctx, d.client, query, field)
-	return float64(sum), err
+	return sum, err
 }
 
 func (d *dskit) SumFieldTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, field string) (float64, error) {
@@ -500,17 +601,33 @@ func (d *dskit) SumFieldTxn(ctx context.Context, txn *datastore.Transaction, que
 		return 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	sum, err := SumForFieldTxn(ctx, txn, d.client, query, field)
-	return float64(sum), err
+	return sum, err
 }
 
 func (d *dskit) SumFieldWithCount(ctx context.Context, query *datastore.Query, field string) (float64, int64, error) {
+	if query == nil {
+		return 0, 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, 0, errors.New("field cannot be empty")
+	}
+
 	count, sums, _, err := QueryAggregationsWithCount(ctx, d.client, query, []string{field}, nil)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return float64(sums[field]), count, nil
+	return sums[field], count, nil
 }
 
 func (d *dskit) SumFieldWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, field string) (float64, int64, error) {
@@ -518,21 +635,39 @@ func (d *dskit) SumFieldWithCountTxn(ctx context.Context, txn *datastore.Transac
 		return 0, 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return 0, 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, 0, errors.New("field cannot be empty")
+	}
+
 	count, sums, _, err := QueryAggregationsWithCountTxn(ctx, txn, d.client, query, []string{field}, nil)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return float64(sums[field]), count, nil
+	return sums[field], count, nil
 }
 
 func (d *dskit) SumFields(ctx context.Context, query *datastore.Query, fields ...string) (map[string]float64, error) {
+	if query == nil {
+		return nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	sums, _, err := QueryAggregations(ctx, d.client, query, fields, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertMapValues(sums), nil
+	return sums, nil
 }
 
 func (d *dskit) SumFieldsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, fields ...string) (map[string]float64, error) {
@@ -540,21 +675,41 @@ func (d *dskit) SumFieldsTxn(ctx context.Context, txn *datastore.Transaction, qu
 		return nil, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	sums, _, err := QueryAggregationsTxn(ctx, txn, d.client, query, fields, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertMapValues(sums), nil
+	return sums, nil
 }
 
 func (d *dskit) SumFieldsWithCount(ctx context.Context, query *datastore.Query, fields ...string) (map[string]float64, int64, error) {
+	if query == nil {
+		return nil, 0, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, 0, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	count, sums, _, err := QueryAggregationsWithCount(ctx, d.client, query, fields, nil)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return convertMapValues(sums), count, nil
+	return sums, count, nil
 }
 
 func (d *dskit) SumFieldsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, fields ...string) (map[string]float64, int64, error) {
@@ -562,15 +717,33 @@ func (d *dskit) SumFieldsWithCountTxn(ctx context.Context, txn *datastore.Transa
 		return nil, 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return nil, 0, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, 0, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	count, sums, _, err := QueryAggregationsWithCountTxn(ctx, txn, d.client, query, fields, nil)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return convertMapValues(sums), count, nil
+	return sums, count, nil
 }
 
 func (d *dskit) AvgField(ctx context.Context, query *datastore.Query, field string) (float64, error) {
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	return AverageForField(ctx, d.client, query, field)
 }
 
@@ -579,16 +752,32 @@ func (d *dskit) AvgFieldTxn(ctx context.Context, txn *datastore.Transaction, que
 		return 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	return AverageForFieldTxn(ctx, txn, d.client, query, field)
 }
 
 func (d *dskit) AvgFieldWithCount(ctx context.Context, query *datastore.Query, field string) (float64, int64, error) {
+	if query == nil {
+		return 0, 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, 0, errors.New("field cannot be empty")
+	}
+
 	count, _, avgs, err := QueryAggregationsWithCount(ctx, d.client, query, nil, []string{field})
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return float64(avgs[field]), count, nil
+	return avgs[field], count, nil
 }
 
 func (d *dskit) AvgFieldWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, field string) (float64, int64, error) {
@@ -596,21 +785,39 @@ func (d *dskit) AvgFieldWithCountTxn(ctx context.Context, txn *datastore.Transac
 		return 0, 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return 0, 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, 0, errors.New("field cannot be empty")
+	}
+
 	count, _, avgs, err := QueryAggregationsWithCountTxn(ctx, txn, d.client, query, nil, []string{field})
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return float64(avgs[field]), count, nil
+	return avgs[field], count, nil
 }
 
 func (d *dskit) AvgFields(ctx context.Context, query *datastore.Query, fields ...string) (map[string]float64, error) {
+	if query == nil {
+		return nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	_, avgs, err := QueryAggregations(ctx, d.client, query, nil, fields)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertMapValues(avgs), nil
+	return avgs, nil
 }
 
 func (d *dskit) AvgFieldsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, fields ...string) (map[string]float64, error) {
@@ -618,21 +825,41 @@ func (d *dskit) AvgFieldsTxn(ctx context.Context, txn *datastore.Transaction, qu
 		return nil, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	_, avgs, err := QueryAggregationsTxn(ctx, txn, d.client, query, nil, fields)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertMapValues(avgs), nil
+	return avgs, nil
 }
 
 func (d *dskit) AvgFieldsWithCount(ctx context.Context, query *datastore.Query, fields ...string) (map[string]float64, int64, error) {
+	if query == nil {
+		return nil, 0, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, 0, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	count, _, avgs, err := QueryAggregationsWithCount(ctx, d.client, query, nil, fields)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return convertMapValues(avgs), count, nil
+	return avgs, count, nil
 }
 
 func (d *dskit) AvgFieldsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, fields ...string) (map[string]float64, int64, error) {
@@ -640,19 +867,29 @@ func (d *dskit) AvgFieldsWithCountTxn(ctx context.Context, txn *datastore.Transa
 		return nil, 0, errors.New("transaction cannot be nil")
 	}
 
+	if query == nil {
+		return nil, 0, errors.New("query cannot be nil")
+	}
+
+	for i, field := range fields {
+		if field == "" {
+			return nil, 0, fmt.Errorf("fields[%d] cannot be empty", i)
+		}
+	}
+
 	count, _, avgs, err := QueryAggregationsWithCountTxn(ctx, txn, d.client, query, nil, fields)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return convertMapValues(avgs), count, nil
+	return avgs, count, nil
 }
 
-func (d *dskit) QueryAggregations(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (map[string]int64, map[string]int64, error) {
+func (d *dskit) QueryAggregations(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (map[string]float64, map[string]float64, error) {
 	return QueryAggregations(ctx, d.client, query, sumFields, avgFields)
 }
 
-func (d *dskit) QueryAggregationsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (map[string]int64, map[string]int64, error) {
+func (d *dskit) QueryAggregationsTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (map[string]float64, map[string]float64, error) {
 	if txn == nil {
 		return nil, nil, errors.New("transaction cannot be nil")
 	}
@@ -660,11 +897,11 @@ func (d *dskit) QueryAggregationsTxn(ctx context.Context, txn *datastore.Transac
 	return QueryAggregationsTxn(ctx, txn, d.client, query, sumFields, avgFields)
 }
 
-func (d *dskit) QueryAggregationsWithCount(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]int64, map[string]int64, error) {
+func (d *dskit) QueryAggregationsWithCount(ctx context.Context, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]float64, map[string]float64, error) {
 	return QueryAggregationsWithCount(ctx, d.client, query, sumFields, avgFields)
 }
 
-func (d *dskit) QueryAggregationsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]int64, map[string]int64, error) {
+func (d *dskit) QueryAggregationsWithCountTxn(ctx context.Context, txn *datastore.Transaction, query *datastore.Query, sumFields, avgFields []string) (int64, map[string]float64, map[string]float64, error) {
 	if txn == nil {
 		return 0, nil, nil, errors.New("transaction cannot be nil")
 	}
@@ -672,40 +909,7 @@ func (d *dskit) QueryAggregationsWithCountTxn(ctx context.Context, txn *datastor
 	return QueryAggregationsWithCountTxn(ctx, txn, d.client, query, sumFields, avgFields)
 }
 
-func (d *dskit) queryKind(query *datastore.Query) (string, error) {
-	if query == nil {
-		return "", errors.New("query cannot be nil")
-	}
-
-	value := reflect.ValueOf(query)
-	if value.Kind() != reflect.Pointer || value.IsNil() {
-		return "", errors.New("query must be a non-nil pointer")
-	}
-
-	elem := value.Elem()
-	field := elem.FieldByName("kind")
-	if !field.IsValid() {
-		return "", errors.New("query kind field missing")
-	}
-
-	if field.Kind() != reflect.String {
-		return "", errors.New("query kind field has unexpected type")
-	}
-
-	kind := field.String()
-	if kind == "" {
-		return "", errors.New("query kind cannot be empty")
-	}
-
-	return kind, nil
-}
-
-func (d *dskit) runQuery(ctx context.Context, query *datastore.Query) ([]any, *datastore.Cursor, error) {
-	kind, err := d.queryKind(query)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func (d *dskit) runQuery(ctx context.Context, kind string, query *datastore.Query) ([]any, *datastore.Cursor, error) {
 	typ, err := d.kindType(kind)
 	if err != nil {
 		return nil, nil, err
@@ -768,7 +972,7 @@ func (d *dskit) registerEntityType(entity any) {
 		typ = reflect.PointerTo(typ)
 	}
 
-	d.kindTypes.Store(kind, typ)
+	rememberKindType(kind, typ)
 }
 
 func (d *dskit) kindType(kind string) (reflect.Type, error) {
@@ -776,7 +980,7 @@ func (d *dskit) kindType(kind string) (reflect.Type, error) {
 		return nil, errors.New("kind cannot be empty")
 	}
 
-	value, ok := d.kindTypes.Load(kind)
+	value, ok := globalKindTypes.Load(kind)
 	if !ok {
 		return nil, fmt.Errorf("entity type for kind %q not registered", kind)
 	}
@@ -791,6 +995,18 @@ func (d *dskit) kindType(kind string) (reflect.Type, error) {
 	}
 
 	return typ, nil
+}
+
+func rememberKindType(kind string, typ reflect.Type) {
+	if kind == "" || typ == nil {
+		return
+	}
+
+	if typ.Kind() != reflect.Pointer {
+		typ = reflect.PointerTo(typ)
+	}
+
+	globalKindTypes.Store(kind, typ)
 }
 
 func (d *dskit) newEntityForKind(kind string) (any, error) {
@@ -874,13 +1090,4 @@ func normalizePointerSlice(values []any) ([]any, error) {
 	}
 
 	return result, nil
-}
-
-func convertMapValues(values map[string]int64) map[string]float64 {
-	result := make(map[string]float64, len(values))
-	for k, v := range values {
-		result[k] = float64(v)
-	}
-
-	return result
 }

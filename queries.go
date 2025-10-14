@@ -3,6 +3,7 @@ package dskit
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"cloud.google.com/go/datastore"
 	"cloud.google.com/go/datastore/apiv1/datastorepb"
@@ -12,6 +13,10 @@ import (
 const defaultQueryCapacity = 16
 
 func Exists(ctx context.Context, client *datastore.Client, key *datastore.Key) (bool, error) {
+	if key == nil {
+		return false, errors.New("key cannot be nil")
+	}
+
 	return ExistsForQuery(
 		ctx,
 		client,
@@ -20,6 +25,14 @@ func Exists(ctx context.Context, client *datastore.Client, key *datastore.Key) (
 }
 
 func ExistsTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, key *datastore.Key) (bool, error) {
+	if txn == nil {
+		return false, errors.New("transaction cannot be nil")
+	}
+
+	if key == nil {
+		return false, errors.New("key cannot be nil")
+	}
+
 	return ExistsForQueryTxn(
 		ctx,
 		txn,
@@ -29,6 +42,10 @@ func ExistsTxn(ctx context.Context, txn *datastore.Transaction, client *datastor
 }
 
 func ExistsForQuery(ctx context.Context, client *datastore.Client, query *datastore.Query) (bool, error) {
+	if query == nil {
+		return false, errors.New("query cannot be nil")
+	}
+
 	query = query.KeysOnly().Limit(1)
 
 	count, err := CountForQuery(ctx, client, query)
@@ -40,6 +57,14 @@ func ExistsForQuery(ctx context.Context, client *datastore.Client, query *datast
 }
 
 func ExistsForQueryTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query) (bool, error) {
+	if txn == nil {
+		return false, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return false, errors.New("query cannot be nil")
+	}
+
 	query = query.KeysOnly().Limit(1).Transaction(txn)
 
 	count, err := CountForQuery(ctx, client, query)
@@ -51,6 +76,10 @@ func ExistsForQueryTxn(ctx context.Context, txn *datastore.Transaction, client *
 }
 
 func Query[E Entity](ctx context.Context, client *datastore.Client, query *datastore.Query) ([]*E, *datastore.Cursor, error) {
+	if query == nil {
+		return nil, nil, errors.New("query cannot be nil")
+	}
+
 	it := client.Run(ctx, query)
 	entities := make([]*E, 0)
 
@@ -87,6 +116,14 @@ func Query[E Entity](ctx context.Context, client *datastore.Client, query *datas
 }
 
 func QueryTxn[E Entity](ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query) ([]*E, *datastore.Cursor, error) {
+	if txn == nil {
+		return nil, nil, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return nil, nil, errors.New("query cannot be nil")
+	}
+
 	query = query.Transaction(txn)
 
 	it := client.Run(ctx, query)
@@ -125,6 +162,10 @@ func QueryTxn[E Entity](ctx context.Context, txn *datastore.Transaction, client 
 }
 
 func QueryOne[E Entity](ctx context.Context, client *datastore.Client, query *datastore.Query) (*E, error) {
+	if query == nil {
+		return nil, errors.New("query cannot be nil")
+	}
+
 	query = query.Limit(1)
 
 	entities, _, err := Query[E](ctx, client, query)
@@ -140,6 +181,14 @@ func QueryOne[E Entity](ctx context.Context, client *datastore.Client, query *da
 }
 
 func QueryOneTxn[E Entity](ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query) (*E, error) {
+	if txn == nil {
+		return nil, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return nil, errors.New("query cannot be nil")
+	}
+
 	query = query.Limit(1).Transaction(txn)
 
 	entities, _, err := Query[E](ctx, client, query)
@@ -155,6 +204,10 @@ func QueryOneTxn[E Entity](ctx context.Context, txn *datastore.Transaction, clie
 }
 
 func QueryKeys(ctx context.Context, client *datastore.Client, query *datastore.Query) ([]*datastore.Key, *datastore.Cursor, error) {
+	if query == nil {
+		return nil, nil, errors.New("query cannot be nil")
+	}
+
 	query = query.KeysOnly()
 	it := client.Run(ctx, query)
 	keys := make([]*datastore.Key, 0)
@@ -181,6 +234,14 @@ func QueryKeys(ctx context.Context, client *datastore.Client, query *datastore.Q
 }
 
 func QueryKeysTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query) ([]*datastore.Key, *datastore.Cursor, error) {
+	if txn == nil {
+		return nil, nil, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return nil, nil, errors.New("query cannot be nil")
+	}
+
 	query = query.KeysOnly().Transaction(txn)
 	it := client.Run(ctx, query)
 	keys := make([]*datastore.Key, 0)
@@ -207,6 +268,10 @@ func QueryKeysTxn(ctx context.Context, txn *datastore.Transaction, client *datas
 }
 
 func CountForQuery(ctx context.Context, client *datastore.Client, query *datastore.Query) (int64, error) {
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
 	aq := query.NewAggregationQuery().WithCount("count")
 
 	r, err := client.RunAggregationQuery(ctx, aq)
@@ -221,6 +286,14 @@ func CountForQuery(ctx context.Context, client *datastore.Client, query *datasto
 }
 
 func CountForQueryTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query) (int64, error) {
+	if txn == nil {
+		return 0, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
 	aq := query.Transaction(txn).NewAggregationQuery().WithCount("count")
 
 	r, err := client.RunAggregationQuery(ctx, aq)
@@ -234,7 +307,15 @@ func CountForQueryTxn(ctx context.Context, txn *datastore.Transaction, client *d
 	return v.GetIntegerValue(), nil
 }
 
-func SumForField(ctx context.Context, client *datastore.Client, query *datastore.Query, field string) (int64, error) {
+func SumForField(ctx context.Context, client *datastore.Client, query *datastore.Query, field string) (float64, error) {
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	aq := query.NewAggregationQuery().WithSum("sum", field)
 
 	r, err := client.RunAggregationQuery(ctx, aq)
@@ -245,10 +326,22 @@ func SumForField(ctx context.Context, client *datastore.Client, query *datastore
 	s := r["sum"]
 	v := s.(*datastorepb.Value)
 
-	return v.GetIntegerValue(), nil
+	return numericValue(v)
 }
 
-func SumForFieldTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query, field string) (int64, error) {
+func SumForFieldTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query, field string) (float64, error) {
+	if txn == nil {
+		return 0, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	aq := query.Transaction(txn).NewAggregationQuery().WithSum("sum", field)
 
 	r, err := client.RunAggregationQuery(ctx, aq)
@@ -259,10 +352,18 @@ func SumForFieldTxn(ctx context.Context, txn *datastore.Transaction, client *dat
 	s := r["sum"]
 	v := s.(*datastorepb.Value)
 
-	return v.GetIntegerValue(), nil
+	return numericValue(v)
 }
 
 func AverageForField(ctx context.Context, client *datastore.Client, query *datastore.Query, field string) (float64, error) {
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	aq := query.NewAggregationQuery().WithAvg("avg", field)
 
 	r, err := client.RunAggregationQuery(ctx, aq)
@@ -277,6 +378,18 @@ func AverageForField(ctx context.Context, client *datastore.Client, query *datas
 }
 
 func AverageForFieldTxn(ctx context.Context, txn *datastore.Transaction, client *datastore.Client, query *datastore.Query, field string) (float64, error) {
+	if txn == nil {
+		return 0, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return 0, errors.New("query cannot be nil")
+	}
+
+	if field == "" {
+		return 0, errors.New("field cannot be empty")
+	}
+
 	aq := query.Transaction(txn).NewAggregationQuery().WithAvg("avg", field)
 
 	r, err := client.RunAggregationQuery(ctx, aq)
@@ -295,11 +408,27 @@ func QueryAggregations(
 	client *datastore.Client,
 	query *datastore.Query,
 	sumFields, avgFields []string,
-) (map[string]int64, map[string]int64, error) {
+) (map[string]float64, map[string]float64, error) {
+	if query == nil {
+		return nil, nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range sumFields {
+		if field == "" {
+			return nil, nil, fmt.Errorf("sumFields[%d] cannot be empty", i)
+		}
+	}
+
+	for i, field := range avgFields {
+		if field == "" {
+			return nil, nil, fmt.Errorf("avgFields[%d] cannot be empty", i)
+		}
+	}
+
 	aq := query.NewAggregationQuery()
 
-	sums := make(map[string]int64)
-	avgs := make(map[string]int64)
+	sums := make(map[string]float64)
+	avgs := make(map[string]float64)
 
 	for _, s := range sumFields {
 		aq = aq.WithSum(s, s)
@@ -318,14 +447,24 @@ func QueryAggregations(
 		sv := r[s]
 		v := sv.(*datastorepb.Value)
 
-		sums[s] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return nil, nil, fmt.Errorf("sum field %q: %w", s, err)
+		}
+
+		sums[s] = value
 	}
 
 	for _, a := range avgFields {
 		av := r[a]
 		v := av.(*datastorepb.Value)
 
-		avgs[a] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return nil, nil, fmt.Errorf("avg field %q: %w", a, err)
+		}
+
+		avgs[a] = value
 	}
 
 	return sums, avgs, nil
@@ -337,11 +476,31 @@ func QueryAggregationsTxn(
 	client *datastore.Client,
 	query *datastore.Query,
 	sumFields, avgFields []string,
-) (map[string]int64, map[string]int64, error) {
+) (map[string]float64, map[string]float64, error) {
+	if txn == nil {
+		return nil, nil, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return nil, nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range sumFields {
+		if field == "" {
+			return nil, nil, fmt.Errorf("sumFields[%d] cannot be empty", i)
+		}
+	}
+
+	for i, field := range avgFields {
+		if field == "" {
+			return nil, nil, fmt.Errorf("avgFields[%d] cannot be empty", i)
+		}
+	}
+
 	aq := query.Transaction(txn).NewAggregationQuery()
 
-	sums := make(map[string]int64)
-	avgs := make(map[string]int64)
+	sums := make(map[string]float64)
+	avgs := make(map[string]float64)
 
 	for _, s := range sumFields {
 		aq = aq.WithSum(s, s)
@@ -360,14 +519,24 @@ func QueryAggregationsTxn(
 		sv := r[s]
 		v := sv.(*datastorepb.Value)
 
-		sums[s] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return nil, nil, fmt.Errorf("sum field %q: %w", s, err)
+		}
+
+		sums[s] = value
 	}
 
 	for _, a := range avgFields {
 		av := r[a]
 		v := av.(*datastorepb.Value)
 
-		avgs[a] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return nil, nil, fmt.Errorf("avg field %q: %w", a, err)
+		}
+
+		avgs[a] = value
 	}
 
 	return sums, avgs, nil
@@ -378,11 +547,27 @@ func QueryAggregationsWithCount(
 	client *datastore.Client,
 	query *datastore.Query,
 	sumFields, avgFields []string,
-) (int64, map[string]int64, map[string]int64, error) {
+) (int64, map[string]float64, map[string]float64, error) {
+	if query == nil {
+		return 0, nil, nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range sumFields {
+		if field == "" {
+			return 0, nil, nil, fmt.Errorf("sumFields[%d] cannot be empty", i)
+		}
+	}
+
+	for i, field := range avgFields {
+		if field == "" {
+			return 0, nil, nil, fmt.Errorf("avgFields[%d] cannot be empty", i)
+		}
+	}
+
 	aq := query.NewAggregationQuery().WithCount("count")
 
-	sums := make(map[string]int64)
-	avgs := make(map[string]int64)
+	sums := make(map[string]float64)
+	avgs := make(map[string]float64)
 
 	for _, s := range sumFields {
 		aq = aq.WithSum(s, s)
@@ -405,14 +590,24 @@ func QueryAggregationsWithCount(
 		sv := r[s]
 		v := sv.(*datastorepb.Value)
 
-		sums[s] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("sum field %q: %w", s, err)
+		}
+
+		sums[s] = value
 	}
 
 	for _, a := range avgFields {
 		av := r[a]
 		v := av.(*datastorepb.Value)
 
-		avgs[a] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("avg field %q: %w", a, err)
+		}
+
+		avgs[a] = value
 	}
 
 	return count, sums, avgs, nil
@@ -424,11 +619,31 @@ func QueryAggregationsWithCountTxn(
 	client *datastore.Client,
 	query *datastore.Query,
 	sumFields, avgFields []string,
-) (int64, map[string]int64, map[string]int64, error) {
+) (int64, map[string]float64, map[string]float64, error) {
+	if txn == nil {
+		return 0, nil, nil, errors.New("transaction cannot be nil")
+	}
+
+	if query == nil {
+		return 0, nil, nil, errors.New("query cannot be nil")
+	}
+
+	for i, field := range sumFields {
+		if field == "" {
+			return 0, nil, nil, fmt.Errorf("sumFields[%d] cannot be empty", i)
+		}
+	}
+
+	for i, field := range avgFields {
+		if field == "" {
+			return 0, nil, nil, fmt.Errorf("avgFields[%d] cannot be empty", i)
+		}
+	}
+
 	aq := query.Transaction(txn).NewAggregationQuery().WithCount("count")
 
-	sums := make(map[string]int64)
-	avgs := make(map[string]int64)
+	sums := make(map[string]float64)
+	avgs := make(map[string]float64)
 
 	for _, s := range sumFields {
 		aq = aq.WithSum(s, s)
@@ -451,15 +666,36 @@ func QueryAggregationsWithCountTxn(
 		sv := r[s]
 		v := sv.(*datastorepb.Value)
 
-		sums[s] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("sum field %q: %w", s, err)
+		}
+
+		sums[s] = value
 	}
 
 	for _, a := range avgFields {
 		av := r[a]
 		v := av.(*datastorepb.Value)
 
-		avgs[a] = v.GetIntegerValue()
+		value, err := numericValue(v)
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("avg field %q: %w", a, err)
+		}
+
+		avgs[a] = value
 	}
 
 	return count, sums, avgs, nil
+}
+
+func numericValue(v *datastorepb.Value) (float64, error) {
+	switch value := v.GetValueType().(type) {
+	case *datastorepb.Value_IntegerValue:
+		return float64(value.IntegerValue), nil
+	case *datastorepb.Value_DoubleValue:
+		return value.DoubleValue, nil
+	default:
+		return 0, fmt.Errorf("unexpected value type %T for numeric aggregation", value)
+	}
 }
