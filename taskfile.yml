@@ -1,0 +1,11 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  mock:
+    desc: Generate mocks for all the client interfaces.
+    cmds:
+      - mockgen -destination mock/client.go -package mock github.com/huysamen/dskit Client
+      - mockgen -destination mock/transaction.go -package mock github.com/huysamen/dskit Transaction
+      - mockgen -destination mock/repo.go -package mock github.com/huysamen/dskit Repo
