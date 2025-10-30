@@ -169,7 +169,7 @@ func QueryOne[E any](ctx context.Context, client Client, query *datastore.Query)
 	}
 
 	if len(entities) == 0 {
-		return nil, datastore.ErrNoSuchEntity
+		return nil, nil
 	}
 
 	return entities[0], nil
@@ -182,7 +182,7 @@ func QueryOneTxn[E any](ctx context.Context, txn Transaction, client Client, que
 	}
 
 	if len(entities) == 0 {
-		return nil, datastore.ErrNoSuchEntity
+		return nil, nil
 	}
 
 	return entities[0], nil
@@ -195,7 +195,7 @@ func QueryOneKey(ctx context.Context, client Client, query *datastore.Query) (*d
 	}
 
 	if len(keys) == 0 {
-		return nil, datastore.ErrNoSuchEntity
+		return nil, nil
 	}
 
 	return keys[0], nil
@@ -208,7 +208,7 @@ func QueryOneKeyTxn(ctx context.Context, txn Transaction, client Client, query *
 	}
 
 	if len(keys) == 0 {
-		return nil, datastore.ErrNoSuchEntity
+		return nil, nil
 	}
 
 	return keys[0], nil
